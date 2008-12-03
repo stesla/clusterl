@@ -1,0 +1,8 @@
+{application, clusterl,
+ [{description, "Clusterl Agent"},
+  {vsn, "@VERSION@"},
+  {modules, [clusterl]},
+  {registered, []},
+  {applications, [kernel, stdlib]},
+  {env, []},
+  {mod, {clusterl, []}}]}.
