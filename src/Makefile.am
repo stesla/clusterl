@@ -1,4 +1,4 @@
-beamdir = $(ERLANG_INSTALL_LIB_DIR_clusterl)/ebin
+beamdir = $(ERLANG_INSTALL_LIB_DIR)/clusterl-$(VERSION)/ebin
 beam_DATA = clusterl.beam
 CLEANFILES = $(beam_DATA)
 

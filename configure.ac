@@ -5,6 +5,7 @@ AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/clusterl.erl])
 
 AC_ERLANG_NEED_ERLC
+AC_ERLANG_SUBST_INSTALL_LIB_DIR
 
 AC_CONFIG_FILES([Makefile
                  src/Makefile])
