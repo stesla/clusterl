@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Configuration.
+ERL=$(which erl)
+[ "$NODE" == "" ] && NODE=debug
+[ "$HOST" == "" ] && HOST=localhost
+ERLANG_NODE=$NODE@$HOST
+[ "$MNESIA_DIR" == "" ] && MNESIA_DIR=/tmp/mnesia-$ERLANG_NODE
+
+# Parse the command line.
+ARGS=
+while [ $# -ne 0 ]; do
+    PARAM=$1
+    shift
+    case $PARAM in
+        --) break ;;
+        --node) ERLANG_NODE=$1 ; shift ;;
+        --mnesia) MNESIA_DIR=$1 ; shift ;;
+        *) ARGS="$ARGS $PARAM" ;;
+    esac
+done
+
+# Choose which type of name to set based on nodename.
+NAME=-name
+[ "$ERLANG_NODE" == "${ERLANG_NODE%.*}" ] && NAME=-sname
+
+# Figure out the root of the project based on where the script is.
+ROOT=$(cd $(dirname $(dirname $0)); pwd)
+
+$ERL $NAME $ERLANG_NODE \
+  -pa $ROOT/src \
+  -boot start_sasl \
+  -mnesia dir \"$MNESIA_DIR\" \
+  -s clusterl
