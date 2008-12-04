@@ -31,4 +31,5 @@ $ERL $NAME $ERLANG_NODE \
   -pa $ROOT/src \
   -boot start_sasl \
   -mnesia dir \"$MNESIA_DIR\" \
-  -s clusterl
+  -s clusterl \
+  $ARGS
