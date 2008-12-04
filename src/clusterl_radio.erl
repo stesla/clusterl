@@ -42,11 +42,11 @@ start_link() ->
 %% Description: Initiates the server
 %%--------------------------------------------------------------------
 init([]) ->
-  case open_socket(get_radio_port()) of
+  case open_socket() of
     {ok, Socket} ->
       {ok, Port} = inet:port(Socket),
       error_logger:info_msg("Radio Port = ~p~n", [Port]),
-      {ok, #state{socket=Socket}};
+      {ok, #state{socket=Port}};
     Error ->
       {stop, Error}
   end.
@@ -106,6 +106,13 @@ get_radio_port() ->
   case application:get_env(radio_port) of
     {ok, P} when is_integer(P) -> P;
     _ -> 0
+  end.
+
+open_socket() ->
+  case open_socket(get_radio_port()) of
+    {ok, _} = Result -> Result;
+    {error, eaddrinuse} -> open_socket(0);
+    Error -> Error
   end.
 
 open_socket(Port) ->
