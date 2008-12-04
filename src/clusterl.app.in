@@ -2,7 +2,9 @@
  [{description, "Clusterl Agent"},
   {vsn, "@VERSION@"},
   {modules, [clusterl]},
-  {registered, []},
+  {registered, [clusterl_network,
+                clusterl_radio,
+                clusterl_sup]},
   {applications, [kernel, stdlib]},
-  {env, []},
+  {env, [{radio_port, 4065}]},
   {mod, {clusterl, []}}]}.

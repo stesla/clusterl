@@ -34,13 +34,8 @@ stop() ->
 %% OTP design principles as a supervision tree, this means starting the
 %% top supervisor of the tree.
 %%--------------------------------------------------------------------
-start(_Type, StartArgs) ->
-  case clusterl_sup:start_link(StartArgs) of
-    {ok, Pid} ->
-      {ok, Pid};
-    Error ->
-      Error
-  end.
+start(_Type, _StartArgs) ->
+  clusterl_sup:start_link().
 
 %%--------------------------------------------------------------------
 %% Function: stop(State) -> void()
