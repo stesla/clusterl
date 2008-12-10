@@ -3,7 +3,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0]).
+-export([start_link/2]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -13,26 +13,26 @@
 %%====================================================================
 %% API functions
 %%====================================================================
-start_link() ->
-  supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+start_link(Id, RadioPort) ->
+  supervisor:start_link({local, ?SERVER}, ?MODULE, [Id, RadioPort]).
 
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
-init([]) ->
-  Network = {clusterl_network,
-             {clusterl_network, start_link, []},
-             permanent,
-             2000,
-             worker,
-             [clusterl_network]},
+init([Id, RadioPort]) ->
   Radio = {clusterl_radio,
-           {clusterl_radio, start_link, []},
+           {clusterl_radio, start_link, [Id, RadioPort]},
            permanent,
            2000,
            worker,
            [clusterl_radio]},
-  {ok, {{one_for_all, 0, 1}, [Network, Radio]}}.
+  Network = {clusterl_network,
+             {clusterl_network, start_link, [Id]},
+             permanent,
+             2000,
+             worker,
+             [clusterl_network]},
+  {ok, {{one_for_all, 0, 1}, [Radio, Network]}}.
 
 %%====================================================================
 %% Internal functions

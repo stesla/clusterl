@@ -3,31 +3,33 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {socket}).
+-record(state, {id,
+                socket}).
 
 -define(SERVER, {local, ?MODULE}).
 
 %%====================================================================
 %% API
 %%====================================================================
-start_link() ->
-  gen_server:start_link(?SERVER, ?MODULE, [], []).
+start_link(Id) ->
+  gen_server:start_link(?SERVER, ?MODULE, [Id], []).
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init([]) ->
+init([Id]) ->
   case open_socket() of
     {ok, Socket} ->
       {ok, Port} = inet:port(Socket),
       error_logger:info_msg("Network Port = ~p~n", [Port]),
-      {ok, #state{socket=Socket}};
+      {ok, #state{id=Id,
+                  socket=Socket}};
     Error ->
       {stop, Error}
   end.

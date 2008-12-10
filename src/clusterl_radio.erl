@@ -3,31 +3,35 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/0]).
+-export([start_link/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
--record(state, {socket}).
+-record(state, {id,
+                radio_port,
+                socket}).
 
 -define(SERVER, {local, ?MODULE}).
 
 %%====================================================================
 %% API
 %%====================================================================
-start_link() ->
-  gen_server:start_link(?SERVER, ?MODULE, [], []).
+start_link(Id, RadioPort) ->
+  gen_server:start_link(?SERVER, ?MODULE, [Id, RadioPort], []).
 
 %%====================================================================
 %% gen_server callbacks
 %%====================================================================
-init([]) ->
-  case open_socket() of
+init([Id, RadioPort]) ->
+  case open_socket(RadioPort) of
     {ok, Socket} ->
       {ok, Port} = inet:port(Socket),
       error_logger:info_msg("Radio Port = ~p~n", [Port]),
-      {ok, #state{socket=Port}};
+      {ok, #state{id=Id,
+                  radio_port=RadioPort,
+                  socket=Port}};
     Error ->
       {stop, Error}
   end.
@@ -51,20 +55,9 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-get_radio_port() ->
-  case application:get_env(radio_port) of
-    {ok, P} when is_integer(P) -> P;
-    _ -> 0
-  end.
-
-open_socket() ->
-  case open_socket(get_radio_port()) of
+open_socket(Port) ->
+  case gen_udp:open(Port, [binary, {active, once}, {broadcast, true}]) of
     {ok, _} = Result -> Result;
     {error, eaddrinuse} -> open_socket(0);
     Error -> Error
   end.
-
-open_socket(Port) ->
-  gen_udp:open(Port, [binary,
-                      {active, once},
-                      {broadcast, true}]).

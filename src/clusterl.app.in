@@ -1,3 +1,4 @@
+% -*- Erlang -*-
 {application, clusterl,
  [{description, "Clusterl Agent"},
   {vsn, "@VERSION@"},
@@ -6,5 +7,6 @@
                 clusterl_radio,
                 clusterl_sup]},
   {applications, [kernel, stdlib]},
-  {env, [{radio_port, 4065}]},
+  {env, [{id, "default"},
+         {radio_port, 4065}]},
   {mod, {clusterl, []}}]}.
