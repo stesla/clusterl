@@ -28,6 +28,8 @@ init([Id]) ->
     {ok, Socket} ->
       {ok, Port} = inet:port(Socket),
       error_logger:info_msg("Network Port = ~p~n", [Port]),
+      clusterl_radio:add_listener(self()),
+      clusterl_radio:broadcast({ping, Id}),
       {ok, #state{id=Id,
                   socket=Socket}};
     Error ->
@@ -41,7 +43,18 @@ handle_call(_Request, _From, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info(_Info, State) ->
+handle_info({radio_signal, Ip, Port, {ping, Id}}, State) ->
+  #state{id=MyId} = State,
+  case Id of
+    MyId -> ignore;
+    _ ->
+      error_logger:info_msg("Received JOIN from ~p~n", [Id]),
+      clusterl_radio:transmit(Ip, Port, {pong, MyId})
+  end,
+  {noreply, State};
+
+handle_info(Info, State) ->
+  error_logger:info_msg("Received Message: ~p~n", [Info]),
   {noreply, State}.
 
 terminate(_Reason, _State) ->

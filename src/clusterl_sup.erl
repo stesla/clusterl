@@ -21,7 +21,7 @@ start_link(Id, RadioPort) ->
 %%====================================================================
 init([Id, RadioPort]) ->
   Radio = {clusterl_radio,
-           {clusterl_radio, start_link, [Id, RadioPort]},
+           {clusterl_radio, start_link, [RadioPort]},
            permanent,
            2000,
            worker,
