@@ -1,6 +1,7 @@
 beamdir = $(ERLANG_INSTALL_LIB_DIR)/clusterl-$(VERSION)/ebin
 beam_DATA =	clusterl.app \
 			clusterl.beam \
+			clusterl_connection.beam \
 			clusterl_network.beam \
 			clusterl_radio.beam \
 			clusterl_sup.beam
