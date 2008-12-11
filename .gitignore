@@ -10,3 +10,4 @@ missing
 *.beam
 *.dump
 *.app
+*.plt

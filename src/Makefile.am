@@ -6,6 +6,8 @@ beam_DATA =	clusterl.app \
 			clusterl_sup.beam
 CLEANFILES = $(beam_DATA)
 
+ERLCFLAGS = @ERLCFLAGS@ +debug_info
+
 SUFFIXES = .erl .beam
 .erl.beam:
 	$(ERLC) $(ERLCFLAGS) -b beam $<
