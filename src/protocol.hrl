@@ -1,1 +1,1 @@
--define(ANNOUNCE(Id, Port), {announce, Id, Port}).
+-define(ANNOUNCE(Id, Peer), {announce, Id, Peer}).

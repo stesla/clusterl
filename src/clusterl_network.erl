@@ -142,15 +142,21 @@ handle_accept_exit(Reason, StateName, #state{socket=ListenSocket} = State) ->
       {next_state, StateName, State#state{accept=Accept}}
   end.
 
-handle_signal(Ip, ?ANNOUNCE(Id, Port), _StateName, State) ->
+handle_signal(Peer, ?ANNOUNCE(Id, Port), StateName, State)
+  when is_integer(Port) ->
+  handle_signal(Peer, ?ANNOUNCE(Id, {Peer, Port}), StateName, State);
+
+handle_signal(_Peer, ?ANNOUNCE(Id, {Ip, Port}), _StateName, State) ->
   #state{id=MyId} = State,
   case Id of
-    MyId -> ignore;
-    _ -> proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
+    MyId ->
+      ignore;
+    _ ->
+      proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
   end;
 
-handle_signal(Ip, Signal, _StateName, _State) ->
-  {Q1,Q2,Q3,Q4} = Ip,
+handle_signal(Peer, Signal, _StateName, _State) ->
+  {Q1,Q2,Q3,Q4} = Peer,
   error_logger:info_msg("Signal from ~B.~B.~B.~B: ~p~n",
                         [Q1, Q2, Q3, Q4, Signal]).
 
