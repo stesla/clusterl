@@ -12,7 +12,6 @@
 %% state_name/2, state_name/3
 %% disconnected
 %% connected
-%% full
 
 %% Internal
 -export([accept/2, connect/3]).
@@ -71,10 +70,9 @@ handle_event({add_connection, Socket}, _StateName, State) ->
   error_logger:info_msg("Added connection ~p~n", [Connection]),
   {next_state, connected, State#state{connections=[Connection | List]}};
 
-handle_event({transmit, Signal}, StateName, State) when StateName =:= connected;
-                                                        StateName =:= full ->
+handle_event({transmit, Signal}, connected, State) ->
   rpc:pmap({clusterl_connection, transmit}, [Signal], State#state.connections),
-  {next_state, StateName, State};
+  {next_state, connected, State};
 
 handle_event(_Event, StateName, State) ->
   {next_state, StateName, State}.
@@ -89,8 +87,8 @@ handle_info({'EXIT', _Pid, normal}, StateName, State) ->
 handle_info({'EXIT', Pid, Reason}, StateName,  #state{accept=Pid} = State) ->
   handle_accept_exit(Reason, StateName, State);
 
-handle_info({radio_signal, Ip, UdpPort, Signal}, StateName, State) ->
-  handle_signal(Ip, UdpPort, Signal, StateName, State),
+handle_info({radio_signal, Ip, _Port, Signal}, StateName, State) ->
+  handle_signal({Ip, Signal}, StateName, State),
   {next_state, StateName, State};
 
 handle_info(Info, StateName, State) ->
@@ -140,22 +138,15 @@ handle_accept_exit(Reason, StateName, #state{socket=ListenSocket} = State) ->
       {next_state, StateName, State#state{accept=Accept}}
   end.
 
-handle_signal(_Ip, _UdpPort, ?ANNOUNCE(_Id, _TcpPort) = _Signal, full, _State) ->
-  error_logger:info_msg("ANNOUNCE WHEN FULL~n");
-
-handle_signal(Ip, _UdpPort, ?ANNOUNCE(Id, TcpPort), _StateName, State) ->
-  #state{id=MyId, port=_MyTcpPort} = State,
+handle_signal({Ip, ?ANNOUNCE(Id, Port)}, _StateName, State) ->
+  #state{id=MyId} = State,
   case Id of
     MyId -> ignore;
-    _ ->
-      error_logger:info_msg("ANNOUNCE ~p ~p~n", [Id, TcpPort]),
-      proc_lib:spawn_link(?MODULE, connect, [Ip, TcpPort, self()])
+    _ -> proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
   end;
 
-handle_signal(Ip, UdpPort, Signal, _StateName, _State) ->
-  {Q1, Q2, Q3, Q4} = Ip,
-  error_logger:info_msg("Signal from ~B.~B.~B.~B:~B -- ~p~n",
-                        [Q1, Q2, Q3, Q4, UdpPort, Signal]).
+handle_signal(Signal, _StateName, _State) ->
+  error_logger:info_msg("Signal: ~p~n", [Signal]).
 
 open_socket() ->
   gen_tcp:listen(0, [binary,
