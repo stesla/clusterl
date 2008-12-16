@@ -3,7 +3,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([start_link/3]).
+-export([start_link/1, transmit/2]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -14,32 +14,42 @@
 -export([wait_for_socket/2,
          ready/2]).
 
--record(state, {id,
-                owner,
+-record(state, {owner,
                 socket}).
 
 %%====================================================================
 %% API
 %%====================================================================
-start_link(Owner, Id, Socket) when is_pid(Owner), is_port(Socket) ->
-  {ok, Pid} = gen_fsm:start_link(?MODULE, [Owner, Id], []),
+start_link(Socket) when is_port(Socket) ->
+  {ok, Pid} = gen_fsm:start_link(?MODULE, [self()], []),
   gen_tcp:controlling_process(Socket, Pid),
-  gen_fsm:send_event(Pid, {set_socket, Socket}).
+  gen_fsm:send_event(Pid, {set_socket, Socket}),
+  {ok, Pid}.
+
+transmit(Pid, Signal) when is_pid(Pid) ->
+  error_logger:info_msg("Transmit: ~p~n", [Signal]),
+  Data = term_to_binary(Signal),
+  gen_fsm:send_event(Pid, {transmit, Data}).
 
 %%====================================================================
 %% gen_fsm callbacks
 %%====================================================================
-init([Owner, Id]) ->
-  {ok, wait_for_socket, #state{id=Id, owner=Owner}}.
+init([Owner]) ->
+  {ok, wait_for_socket, #state{owner=Owner}}.
 
 %%% state_name(_Event, State) ->
 %%%   {next_state, state_name, State}.
+
+ready({transmit, Data}, #state{socket=S} = State) ->
+  ok = gen_tcp:send(S, Data),
+  {next_state, ready, State};
 
 ready(Event, State) ->
   error_logger:info_msg("Received Event: ~p~n", [Event]),
   {next_state, ready, State}.
 
 wait_for_socket({set_socket, Socket}, State) ->
+  ok = inet:setopts(Socket, [{active, once}]),
   {next_state, ready, State#state{socket=Socket}};
 wait_for_socket(Event, State) ->
   error_logger:info_msg("Received Event: ~p~n", [Event]),
@@ -56,20 +66,20 @@ handle_sync_event(_Event, _From, StateName, State) ->
   Reply = ok,
   {reply, Reply, StateName, State}.
 
-handle_info({tcp, S, Data}, ready, #state{socket=S} = State) ->
-  #state{id=Id, owner=Owner} = State,
-  Owner ! {connection_signal, Id, binary_to_term(Data)},
+handle_info({tcp, S, Data}, ready, #state{owner=Pid, socket=S} = State) ->
+  Pid ! {connection_signal, self(), binary_to_term(Data)},
+  ok = inet:setopts(S, [{active, once}]),
   {next_state, ready, State};
 
-handle_info({tcp_closed, S}, ready, #state{socket=S} = State) ->
-  #state{id=Id, owner=Owner} = State,
-  Owner ! {connection_closed, Id},
+handle_info({tcp_closed, S}, ready, #state{owner=Pid, socket=S} = State) ->
+  Pid ! {connection_closed, self()},
   {next_state, ready, State};
 
 handle_info({tcp_error, S, Reason}, ready, #state{socket=S} = State) ->
   {stop, {tcp_error, Reason}, State};
 
-handle_info(_Info, StateName, State) ->
+handle_info(Info, StateName, State) ->
+  error_logger:info_msg("Received Message: ~p~n", [Info]),
   {next_state, StateName, State}.
 
 terminate(_Reason, _StateName, _State) ->

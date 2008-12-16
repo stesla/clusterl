@@ -3,7 +3,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([start_link/1]).
+-export([start_link/1, transmit/1]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -15,12 +15,12 @@
 %% full
 
 %% Internal
--export([accept/2, connect/4]).
+-export([accept/2, connect/3]).
 
 -include("protocol.hrl").
 
 -record(state, {accept,
-                connections = dict:new(),
+                connections = [],
                 id,
                 port,
                 socket}).
@@ -33,6 +33,9 @@
 %%====================================================================
 start_link(Id) ->
   gen_fsm:start_link({local, ?MODULE}, ?MODULE, [Id], []).
+
+transmit(Signal) ->
+  gen_fsm:send_all_state_event(?MODULE, {transmit, Signal}).
 
 %%====================================================================
 %% gen_fsm callbacks
@@ -62,16 +65,16 @@ init([Id]) ->
 %%%   Reply = ok,
 %%%   {reply, Reply, state_name, State}.
 
-handle_event({accepted, Socket}, StateName, State) ->
-  {ok, {Address, Port}} = inet:peername(Socket),
-  error_logger:info_msg("Connection from ~p ~p~n", [Address, Port]),
-  ok = inet:setopts(Socket, [{active, once}]),
-  {next_state, StateName, State};
+%% TODO: Fix this to pay attention to the number of connections.
+handle_event({add_connection, Socket}, _StateName, State) ->
+  #state{connections=List} = State,
+  {ok, Connection} = clusterl_connection:start_link(Socket),
+  error_logger:info_msg("Added connection ~p~n", [Connection]),
+  {next_state, connected, State#state{connections=[Connection | List]}};
 
-handle_event({connected, Id, Socket}, StateName, State) ->
-  {ok, {Address, Port}} = inet:peername(Socket),
-  error_logger:info_msg("Connected to ~p on ~p ~p~n", [Id, Address, Port]),
-  ok = inet:setopts(Socket, [{active, once}]),
+handle_event({transmit, Signal}, StateName, State) when StateName =:= connected;
+                                                        StateName =:= full ->
+  rpc:pmap({clusterl_connection, transmit}, [Signal], State#state.connections),
   {next_state, StateName, State};
 
 handle_event(_Event, StateName, State) ->
@@ -106,21 +109,23 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%--------------------------------------------------------------------
 accept(ListenSocket, Pid) ->
   case gen_tcp:accept(ListenSocket, ?ACCEPT_TIMEOUT) of
-    {ok, Socket} ->
-      gen_tcp:controlling_process(Socket, Pid),
-      gen_fsm:send_all_state_event(Pid, {accepted, Socket});
     {error, timeout} ->
       exit(normal);
     {error, Reason} ->
-      exit({tcp, accept, Reason})
+      exit({tcp, accept, Reason});
+    {ok, Socket} ->
+      add_connection(Pid, Socket)
   end.
 
-connect(Id, Ip, TcpPort, Pid) ->
+add_connection(Pid, Socket) ->
+  gen_tcp:controlling_process(Socket, Pid),
+  gen_fsm:send_all_state_event(Pid, {add_connection, Socket}).
+
+connect(Ip, TcpPort, Pid) ->
   Opts = [binary, {active, false}, {packet, 0}],
   case gen_tcp:connect(Ip, TcpPort, Opts, ?CONNECT_TIMEOUT) of
     {ok, Socket} ->
-      gen_tcp:controlling_process(Socket, Pid),
-      gen_fsm:send_all_state_event(Pid, {connected, Id, Socket});
+      add_connection(Pid, Socket);
     _ ->
       ignore
   end.
@@ -145,7 +150,7 @@ handle_signal(Ip, _UdpPort, ?ANNOUNCE(Id, TcpPort), _StateName, State) ->
     MyId -> ignore;
     _ ->
       error_logger:info_msg("ANNOUNCE ~p ~p~n", [Id, TcpPort]),
-      proc_lib:spawn_link(?MODULE, connect, [Id, Ip, TcpPort, self()])
+      proc_lib:spawn_link(?MODULE, connect, [Ip, TcpPort, self()])
   end;
 
 handle_signal(Ip, UdpPort, Signal, _StateName, _State) ->
