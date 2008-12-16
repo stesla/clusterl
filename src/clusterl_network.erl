@@ -78,16 +78,15 @@ handle_sync_event(_Event, _From, StateName, State) ->
   Reply = ok,
   {reply, Reply, StateName, State}.
 
-handle_info({'EXIT', _Pid, normal}, StateName, State) ->
-  {next_state, StateName, State};
-
 handle_info({'EXIT', Pid, Reason}, StateName,  #state{accept=Pid} = State) ->
   handle_accept_exit(Reason, StateName, State);
+
+handle_info({'EXIT', _Pid, normal}, StateName, State) ->
+  {next_state, StateName, State};
 
 handle_info({link_closed, Connection}, StateName, State) ->
   #state{link_ids=Ids, links=Links} = State,
   [Id] = dict:fetch(Connection, Links),
-  error_logger:info_msg("Removing link for ~p~n", [Id]),
   NewIds = sets:del_element(Id, Ids),
   NewLinks = dict:erase(Connection, Links),
   {next_state, StateName, State#state{link_ids=NewIds, links=NewLinks}};
