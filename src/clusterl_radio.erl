@@ -71,7 +71,7 @@ handle_info({udp, S, Ip, _Port, Packet}, #state{socket=S} = State) ->
   ok = inet:setopts(S, [{active, once}]),
   Signal = binary_to_term(Packet),
   sets:fold(fun(Pid, _) ->
-                relay_signal(Pid, Ip, Signal)
+                clusterl_network:receive_signal(Pid, Ip, Signal)
             end, ok, Listeners),
   {noreply, State};
 
@@ -87,9 +87,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-relay_signal(Pid, Ip, Signal) ->
-  Pid ! {signal, Ip, Signal}.
-
 open_socket(Port) ->
   case gen_udp:open(Port, [binary, {active, once}, {broadcast, true}]) of
     {ok, _} = Result -> Result;

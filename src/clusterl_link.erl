@@ -101,7 +101,7 @@ handle_info({tcp, S, Data}, StateName, #state{socket=S} = State) ->
   case StateName of
     ready ->
       #state{owner=Pid, peer={Ip, _Port}} = State,
-      Pid ! {signal, Ip, Signal};
+      clusterl_network:receive_signal(Pid, Ip, Signal);
     wait_for_connect ->
       case Signal of
         ?CONNECT(_) -> gen_fsm:send_event(self(), Signal);

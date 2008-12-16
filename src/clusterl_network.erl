@@ -3,7 +3,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([start_link/0, transmit/1]).
+-export([receive_signal/3, start_link/0, transmit/1]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -29,6 +29,9 @@
 %%====================================================================
 %% API
 %%====================================================================
+receive_signal(Pid, Ip, Signal) ->
+  Pid ! {signal, self(), Ip, Signal}.
+
 start_link() ->
   gen_fsm:start_link({local, ?MODULE}, ?MODULE, [?ID], []).
 
@@ -65,8 +68,7 @@ init([Id]) ->
 %%%   {reply, Reply, state_name, State}.
 
 handle_event({transmit, Signal}, connected, State) ->
-  Links = dict:fetch_keys(State#state.links),
-  rpc:pmap({clusterl_link, transmit}, [Signal], Links),
+  transmit(Signal, links(State)),
   {next_state, connected, State};
 
 handle_event(_Event, StateName, State) ->
@@ -104,8 +106,8 @@ handle_info({link_opened, Connection, Id}, StateName, State) ->
       {next_state, connected, NewState}
   end;
 
-handle_info({signal, Ip, Signal}, StateName, State) ->
-  handle_signal(Ip, Signal, StateName, State),
+handle_info({signal, Link, Ip, Signal}, StateName, State) ->
+  handle_signal(Ip, Link, Signal, StateName, State),
   {next_state, StateName, State};
 
 handle_info(Info, StateName, State) ->
@@ -147,20 +149,28 @@ handle_accept_exit(Reason, StateName, #state{socket=ListenSocket} = State) ->
       {next_state, StateName, State#state{accept=Accept}}
   end.
 
-handle_signal(Peer, ?ANNOUNCE(Id, Port), StateName, State)
+handle_signal(Peer, Link, ?ANNOUNCE(Id, Port), StateName, State)
   when is_integer(Port) ->
-  handle_signal(Peer, ?ANNOUNCE(Id, {Peer, Port}), StateName, State);
+  handle_signal(Peer, Link, ?ANNOUNCE(Id, {Peer, Port}), StateName, State);
 
-handle_signal(_Peer, ?ANNOUNCE(Id, {Ip, Port}), _StateName, State) ->
+handle_signal(_Peer, Link, ?ANNOUNCE(Id, {Ip, Port}) = Signal,
+              _StateName, State) ->
   #state{id=MyId} = State,
   case Id of
     MyId ->
       ignore;
     _ ->
+      relay(Signal, Link, links(State)),
       proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
   end;
 
-handle_signal(Peer, Signal, _StateName, _State) ->
+handle_signal(Peer, _Link, Signal, _StateName, _State) ->
+  log_signal(Peer, Signal).
+
+links(#state{links=Links}) ->
+  dict:fetch_keys(Links).
+
+log_signal(Peer, Signal) ->
   {Q1,Q2,Q3,Q4} = Peer,
   error_logger:info_msg("Signal from ~B.~B.~B.~B: ~p~n",
                         [Q1, Q2, Q3, Q4, Signal]).
@@ -171,6 +181,12 @@ open_socket() ->
                      {packet, 0},
                      {reuseaddr, true}]).
 
+relay(Signal, FromLink, Links) ->
+  transmit(Signal, lists:delete(FromLink, Links)).
+
 spawn_accept(ListenSocket) ->
   Pid = proc_lib:spawn_link(?MODULE, accept, [ListenSocket, self()]),
   {ok, Pid}.
+
+transmit(Signal, Links) ->
+  rpc:pmap({clusterl_link, transmit}, [Signal], Links).
