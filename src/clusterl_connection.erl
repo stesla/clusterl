@@ -15,6 +15,7 @@
          ready/2]).
 
 -record(state, {owner,
+                peer,
                 socket}).
 
 %%====================================================================
@@ -27,7 +28,6 @@ start_link(Socket) when is_port(Socket) ->
   {ok, Pid}.
 
 transmit(Pid, Signal) when is_pid(Pid) ->
-  error_logger:info_msg("Transmit: ~p~n", [Signal]),
   Data = term_to_binary(Signal),
   gen_fsm:send_event(Pid, {transmit, Data}).
 
@@ -49,8 +49,9 @@ ready(Event, State) ->
   {next_state, ready, State}.
 
 wait_for_socket({set_socket, Socket}, State) ->
+  {ok, Peer} = inet:peername(Socket),
   ok = inet:setopts(Socket, [{active, once}]),
-  {next_state, ready, State#state{socket=Socket}};
+  {next_state, ready, State#state{peer=Peer, socket=Socket}};
 wait_for_socket(Event, State) ->
   error_logger:info_msg("Received Event: ~p~n", [Event]),
   {next_state, wait_for_socket, State}.
@@ -66,14 +67,15 @@ handle_sync_event(_Event, _From, StateName, State) ->
   Reply = ok,
   {reply, Reply, StateName, State}.
 
-handle_info({tcp, S, Data}, ready, #state{owner=Pid, socket=S} = State) ->
-  Pid ! {connection_signal, self(), binary_to_term(Data)},
+handle_info({tcp, S, Data}, ready, #state{socket=S} = State) ->
+  #state{owner=Pid, peer={Ip, _Port}} = State,
+  Pid ! {signal, Ip, binary_to_term(Data)},
   ok = inet:setopts(S, [{active, once}]),
   {next_state, ready, State};
 
 handle_info({tcp_closed, S}, ready, #state{owner=Pid, socket=S} = State) ->
   Pid ! {connection_closed, self()},
-  {next_state, ready, State};
+  {stop, normal, State};
 
 handle_info({tcp_error, S, Reason}, ready, #state{socket=S} = State) ->
   {stop, {tcp_error, Reason}, State};

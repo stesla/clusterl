@@ -69,12 +69,12 @@ handle_cast({transmit, Ip, Port, Signal}, State) ->
 handle_cast(_Msg, State) ->
   {noreply, State}.
 
-handle_info({udp, S, Ip, Port, Packet}, #state{socket=S} = State) ->
+handle_info({udp, S, Ip, _Port, Packet}, #state{socket=S} = State) ->
   #state{listeners=Listeners} = State,
   ok = inet:setopts(S, [{active, once}]),
   Signal = binary_to_term(Packet),
   sets:fold(fun(Pid, _) ->
-                relay_radio_signal(Pid, Ip, Port, Signal)
+                relay_signal(Pid, Ip, Signal)
             end, ok, Listeners),
   {noreply, State};
 
@@ -90,8 +90,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 %%% Internal functions
 %%--------------------------------------------------------------------
-relay_radio_signal(Pid, Ip, Port, Signal) ->
-  Pid ! {radio_signal, Ip, Port, Signal}.
+relay_signal(Pid, Ip, Signal) ->
+  Pid ! {signal, Ip, Signal}.
 
 open_socket(Port) ->
   case gen_udp:open(Port, [binary, {active, once}, {broadcast, true}]) of

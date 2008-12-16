@@ -91,12 +91,8 @@ handle_info({connection_closed, Connection}, StateName, State) ->
   List = lists:delete(Connection, State#state.connections),
   {next_state, StateName, State#state{connections=List}};
 
-handle_info({connection_signal, _Connection, Signal}, StateName, State) ->
-  handle_signal(Signal, StateName, State),
-  {next_state, StateName, State};
-
-handle_info({radio_signal, Ip, _Port, Signal}, StateName, State) ->
-  handle_signal({Ip, Signal}, StateName, State),
+handle_info({signal, Ip, Signal}, StateName, State) ->
+  handle_signal(Ip, Signal, StateName, State),
   {next_state, StateName, State};
 
 handle_info(Info, StateName, State) ->
@@ -146,15 +142,17 @@ handle_accept_exit(Reason, StateName, #state{socket=ListenSocket} = State) ->
       {next_state, StateName, State#state{accept=Accept}}
   end.
 
-handle_signal({Ip, ?ANNOUNCE(Id, Port)}, _StateName, State) ->
+handle_signal(Ip, ?ANNOUNCE(Id, Port), _StateName, State) ->
   #state{id=MyId} = State,
   case Id of
     MyId -> ignore;
     _ -> proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
   end;
 
-handle_signal(Signal, _StateName, _State) ->
-  error_logger:info_msg("Signal: ~p~n", [Signal]).
+handle_signal(Ip, Signal, _StateName, _State) ->
+  {Q1,Q2,Q3,Q4} = Ip,
+  error_logger:info_msg("Signal from ~B.~B.~B.~B: ~p~n",
+                        [Q1, Q2, Q3, Q4, Signal]).
 
 open_socket() ->
   gen_tcp:listen(0, [binary,
