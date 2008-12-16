@@ -63,13 +63,6 @@ init([Id]) ->
 %%%   Reply = ok,
 %%%   {reply, Reply, state_name, State}.
 
-%% TODO: Fix this to pay attention to the number of connections.
-handle_event({add_connection, Socket}, _StateName, State) ->
-  #state{connections=List} = State,
-  {ok, Connection} = clusterl_connection:start_link(Socket),
-  error_logger:info_msg("Added connection ~p~n", [Connection]),
-  {next_state, connected, State#state{connections=[Connection | List]}};
-
 handle_event({transmit, Signal}, connected, State) ->
   rpc:pmap({clusterl_connection, transmit}, [Signal], State#state.connections),
   {next_state, connected, State};
@@ -110,25 +103,17 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 %%--------------------------------------------------------------------
 accept(ListenSocket, Pid) ->
   case gen_tcp:accept(ListenSocket, ?ACCEPT_TIMEOUT) of
-    {error, timeout} ->
-      exit(normal);
-    {error, Reason} ->
-      exit({tcp, accept, Reason});
-    {ok, Socket} ->
-      add_connection(Pid, Socket)
+    {error, timeout} -> exit(normal);
+    {error, Reason} -> exit({tcp, accept, Reason});
+    {ok, Socket} -> clusterl_connection:start_link(Pid, Socket, inbound)
   end.
 
-add_connection(Pid, Socket) ->
-  gen_tcp:controlling_process(Socket, Pid),
-  gen_fsm:send_all_state_event(Pid, {add_connection, Socket}).
 
 connect(Ip, TcpPort, Pid) ->
   Opts = [binary, {active, false}, {packet, 0}],
   case gen_tcp:connect(Ip, TcpPort, Opts, ?CONNECT_TIMEOUT) of
-    {ok, Socket} ->
-      add_connection(Pid, Socket);
-    _ ->
-      ignore
+    {ok, Socket} -> clusterl_connection:start_link(Pid, Socket, outbound);
+    _ -> ignore
   end.
 
 handle_accept_exit(Reason, StateName, #state{socket=ListenSocket} = State) ->

@@ -1,1 +1,2 @@
 -define(ANNOUNCE(Id, Peer), {announce, Id, Peer}).
+-define(CONNECT(Id), {connect, Id}).
