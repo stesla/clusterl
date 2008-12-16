@@ -87,6 +87,14 @@ handle_info({'EXIT', _Pid, normal}, StateName, State) ->
 handle_info({'EXIT', Pid, Reason}, StateName,  #state{accept=Pid} = State) ->
   handle_accept_exit(Reason, StateName, State);
 
+handle_info({connection_closed, Connection}, StateName, State) ->
+  List = lists:delete(Connection, State#state.connections),
+  {next_state, StateName, State#state{connections=List}};
+
+handle_info({connection_signal, _Connection, Signal}, StateName, State) ->
+  handle_signal(Signal, StateName, State),
+  {next_state, StateName, State};
+
 handle_info({radio_signal, Ip, _Port, Signal}, StateName, State) ->
   handle_signal({Ip, Signal}, StateName, State),
   {next_state, StateName, State};
