@@ -1,4 +1,4 @@
--module(clusterl_connection).
+-module(clusterl_link).
 
 -behaviour(gen_fsm).
 
@@ -61,12 +61,12 @@ wait_for_connect({connect, Id}, State) ->
     inbound -> transmit_signal(Socket, ?CONNECT(?ID));
     outbound -> ignore
   end,
-  Pid ! {connection_opened, self(), Id},
+  Pid ! {link_opened, self(), Id},
   {next_state, ready, State};
 
 wait_for_connect(timeout, State) ->
   #state{peer={{Q1,Q2,Q3,Q4},Port}} = State,
-  error_logger:info_msg("Connection from ~B.~B.~B.~B:~B timed out.~n",
+  error_logger:info_msg("Link from ~B.~B.~B.~B:~B timed out.~n",
                         [Q1,Q2,Q3,Q4,Port]),
   %% TODO: Consider a non-normal exit status.
   {stop, normal, State}.
@@ -113,7 +113,7 @@ handle_info({tcp, S, Data}, StateName, #state{socket=S} = State) ->
 
 handle_info({tcp_closed, S}, StateName, #state{owner=Pid, socket=S} = State) ->
   case StateName of
-    ready -> Pid ! {connection_closed, self()};
+    ready -> Pid ! {link_closed, self()};
     _ -> ignore
   end,
   {stop, normal, State};

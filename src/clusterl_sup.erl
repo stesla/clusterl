@@ -19,16 +19,16 @@ start_link() ->
   supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 start_connection(Socket) ->
-  supervisor:start_child(clusterl_connection_sup, [self(), Socket]).
+  supervisor:start_child(clusterl_link_sup, [self(), Socket]).
 
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
 init([]) ->
-  ConnectionSup = {clusterl_connection_sup,
+  ConnectionSup = {clusterl_link_sup,
                    {supervisor,
                     start_link,
-                    [{local, clusterl_connection_sup}, ?MODULE, [connection]]},
+                    [{local, clusterl_link_sup}, ?MODULE, [connection]]},
                    permanent,
                    infinity,
                    supervisor,
@@ -54,7 +54,7 @@ init([connection]) ->
   {ok,
    {{simple_one_for_one, ?MAX_RESTART, ?MAX_TIME},
     [{undefined,
-      {clusterl_connection, start_link, []},
+      {clusterl_link, start_link, []},
       temporary,
       2000,
       worker,

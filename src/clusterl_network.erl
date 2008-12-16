@@ -66,7 +66,7 @@ init([Id]) ->
 
 handle_event({transmit, Signal}, connected, State) ->
   Links = dict:fetch_keys(State#state.links),
-  rpc:pmap({clusterl_connection, transmit}, [Signal], Links),
+  rpc:pmap({clusterl_link, transmit}, [Signal], Links),
   {next_state, connected, State};
 
 handle_event(_Event, StateName, State) ->
@@ -82,7 +82,7 @@ handle_info({'EXIT', _Pid, normal}, StateName, State) ->
 handle_info({'EXIT', Pid, Reason}, StateName,  #state{accept=Pid} = State) ->
   handle_accept_exit(Reason, StateName, State);
 
-handle_info({connection_closed, Connection}, StateName, State) ->
+handle_info({link_closed, Connection}, StateName, State) ->
   #state{link_ids=Ids, links=Links} = State,
   [Id] = dict:fetch(Connection, Links),
   error_logger:info_msg("Removing link for ~p~n", [Id]),
@@ -90,12 +90,12 @@ handle_info({connection_closed, Connection}, StateName, State) ->
   NewLinks = dict:erase(Connection, Links),
   {next_state, StateName, State#state{link_ids=NewIds, links=NewLinks}};
 
-handle_info({connection_opened, Connection, Id}, StateName, State) ->
+handle_info({link_opened, Connection, Id}, StateName, State) ->
   #state{link_ids=Ids, links=Links} = State,
   case sets:is_element(Id, Ids) of
     true ->
       %% TODO: Consider sending something over the wire
-      clusterl_connection:close(Connection),
+      clusterl_link:close(Connection),
       {next_state, StateName, State};
     false ->
       NewIds = sets:add_element(Id, Ids),
@@ -125,14 +125,14 @@ accept(ListenSocket, Pid) ->
   case gen_tcp:accept(ListenSocket, ?ACCEPT_TIMEOUT) of
     {error, timeout} -> exit(normal);
     {error, Reason} -> exit({tcp, accept, Reason});
-    {ok, Socket} -> clusterl_connection:start_link(Pid, Socket, inbound)
+    {ok, Socket} -> clusterl_link:start_link(Pid, Socket, inbound)
   end.
 
 
 connect(Ip, TcpPort, Pid) ->
   Opts = [binary, {active, false}, {packet, 0}],
   case gen_tcp:connect(Ip, TcpPort, Opts, ?CONNECT_TIMEOUT) of
-    {ok, Socket} -> clusterl_connection:start_link(Pid, Socket, outbound);
+    {ok, Socket} -> clusterl_link:start_link(Pid, Socket, outbound);
     _ -> ignore
   end.
 
