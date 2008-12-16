@@ -4,7 +4,7 @@
 
 %% API
 -export([start_link/0]).
--export([add_listener/1, broadcast/1, transmit/3]).
+-export([add_listener/1, broadcast/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -30,9 +30,6 @@ add_listener(Pid) when is_pid(Pid) ->
 
 broadcast(Signal) ->
   gen_server:cast(?MODULE, {broadcast, Signal}).
-
-transmit(Ip, Port, Signal) ->
-  gen_server:cast(?MODULE, {transmit, Ip, Port, Signal}).
 
 %%====================================================================
 %% gen_server callbacks
