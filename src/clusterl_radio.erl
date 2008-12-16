@@ -3,7 +3,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1]).
+-export([start_link/0]).
 -export([add_listener/1, broadcast/1, transmit/3]).
 
 %% gen_server callbacks
@@ -15,14 +15,15 @@
                 radio_port,
                 socket}).
 
--define(BROADCAST_IP, {255,255,255,255}).
+-include("config.hrl").
+
 -define(SERVER, {local, ?MODULE}).
 
 %%====================================================================
 %% API
 %%====================================================================
-start_link(RadioPort) ->
-  gen_server:start_link(?SERVER, ?MODULE, [RadioPort], []).
+start_link() ->
+  gen_server:start_link(?SERVER, ?MODULE, [?RADIO_PORT], []).
 
 add_listener(Pid) when is_pid(Pid) ->
   gen_server:cast(?MODULE, {add_listener, Pid}).

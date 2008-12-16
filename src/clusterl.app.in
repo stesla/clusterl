@@ -3,6 +3,7 @@
  [{description, "Clusterl Agent"},
   {vsn, "@VERSION@"},
   {modules, [clusterl,
+             clusterl_config,
              clusterl_connection,
              clusterl_network,
              clusterl_radio,
@@ -12,6 +13,9 @@
                 clusterl_radio,
                 clusterl_sup]},
   {applications, [kernel, stdlib]},
-  {env, [{id, "default"},
+  {env, [{accept_timeout, 10000},
+         {broadcast_ip, {255,255,255,255}},
+         {connect_timeout, 60000},
+         {id, "default"},
          {radio_port, 4065}]},
   {mod, {clusterl, []}}]}.

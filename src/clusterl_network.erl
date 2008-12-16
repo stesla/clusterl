@@ -3,7 +3,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([start_link/1, transmit/1]).
+-export([start_link/0, transmit/1]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -17,6 +17,7 @@
 %% Internal
 -export([accept/2, connect/3]).
 
+-include("config.hrl").
 -include("protocol.hrl").
 
 -record(state, {accept,
@@ -25,14 +26,11 @@
                 port,
                 socket}).
 
--define(ACCEPT_TIMEOUT, 10000).
--define(CONNECT_TIMEOUT, 60000).
-
 %%====================================================================
 %% API
 %%====================================================================
-start_link(Id) ->
-  gen_fsm:start_link({local, ?MODULE}, ?MODULE, [Id], []).
+start_link() ->
+  gen_fsm:start_link({local, ?MODULE}, ?MODULE, [?ID], []).
 
 transmit(Signal) ->
   gen_fsm:send_all_state_event(?MODULE, {transmit, Signal}).
@@ -45,7 +43,8 @@ init([Id]) ->
   case open_socket() of
     {ok, Socket} ->
       {ok, Port} = inet:port(Socket),
-      error_logger:info_msg("Network Port = ~p~n", [Port]),
+      error_logger:info_msg("Network Id = ~p~nNetwork Port = ~p~n",
+                            [Id, Port]),
       clusterl_radio:add_listener(self()),
       clusterl_radio:broadcast(?ANNOUNCE(Id, Port)),
       {ok, Pid} = spawn_accept(Socket),

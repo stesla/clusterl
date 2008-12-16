@@ -3,7 +3,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_connection/2, start_link/2]).
+-export([start_connection/1, start_link/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -15,16 +15,16 @@
 %%====================================================================
 %% API functions
 %%====================================================================
-start_link(Id, RadioPort) ->
-  supervisor:start_link({local, ?SERVER}, ?MODULE, [Id, RadioPort]).
+start_link() ->
+  supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
-start_connection(Id, Socket) ->
-  supervisor:start_child(clusterl_connection_sup, [self(), Id, Socket]).
+start_connection(Socket) ->
+  supervisor:start_child(clusterl_connection_sup, [self(), Socket]).
 
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
-init([Id, RadioPort]) ->
+init([]) ->
   ConnectionSup = {clusterl_connection_sup,
                    {supervisor,
                     start_link,
@@ -34,13 +34,13 @@ init([Id, RadioPort]) ->
                    supervisor,
                    []},
   Radio = {clusterl_radio,
-           {clusterl_radio, start_link, [RadioPort]},
+           {clusterl_radio, start_link, []},
            permanent,
            2000,
            worker,
            [clusterl_radio]},
   Network = {clusterl_network,
-             {clusterl_network, start_link, [Id]},
+             {clusterl_network, start_link, []},
              permanent,
              2000,
              worker,
