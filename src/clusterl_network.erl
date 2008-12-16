@@ -20,7 +20,8 @@
 -include("protocol.hrl").
 
 -record(state, {accept,
-                connections = [],
+                link_ids = sets:new(),
+                links = dict:new(),
                 id,
                 port,
                 socket}).
@@ -64,7 +65,8 @@ init([Id]) ->
 %%%   {reply, Reply, state_name, State}.
 
 handle_event({transmit, Signal}, connected, State) ->
-  rpc:pmap({clusterl_connection, transmit}, [Signal], State#state.connections),
+  Links = dict:fetch_keys(State#state.links),
+  rpc:pmap({clusterl_connection, transmit}, [Signal], Links),
   {next_state, connected, State};
 
 handle_event(_Event, StateName, State) ->
@@ -81,8 +83,26 @@ handle_info({'EXIT', Pid, Reason}, StateName,  #state{accept=Pid} = State) ->
   handle_accept_exit(Reason, StateName, State);
 
 handle_info({connection_closed, Connection}, StateName, State) ->
-  List = lists:delete(Connection, State#state.connections),
-  {next_state, StateName, State#state{connections=List}};
+  #state{link_ids=Ids, links=Links} = State,
+  [Id] = dict:fetch(Connection, Links),
+  error_logger:info_msg("Removing link for ~p~n", [Id]),
+  NewIds = sets:del_element(Id, Ids),
+  NewLinks = dict:erase(Connection, Links),
+  {next_state, StateName, State#state{link_ids=NewIds, links=NewLinks}};
+
+handle_info({connection_opened, Connection, Id}, StateName, State) ->
+  #state{link_ids=Ids, links=Links} = State,
+  case sets:is_element(Id, Ids) of
+    true ->
+      %% TODO: Consider sending something over the wire
+      clusterl_connection:close(Connection),
+      {next_state, StateName, State};
+    false ->
+      NewIds = sets:add_element(Id, Ids),
+      NewLinks = dict:append(Connection, Id, Links),
+      NewState = State#state{link_ids=NewIds, links=NewLinks},
+      {next_state, connected, NewState}
+  end;
 
 handle_info({signal, Ip, Signal}, StateName, State) ->
   handle_signal(Ip, Signal, StateName, State),
