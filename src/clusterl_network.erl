@@ -43,6 +43,7 @@ transmit(Signal, To, Hops) ->
 %%====================================================================
 init([Id]) ->
   process_flag(trap_exit, true),
+  clusterl_dedup:init(),
   case open_socket() of
     {ok, Socket} ->
       {ok, Port} = inet:port(Socket),
@@ -50,7 +51,7 @@ init([Id]) ->
                             [Id, Port]),
       clusterl_radio:add_listener(self()),
       Header = ?HEADER(origin, any, infinity),
-      clusterl_radio:broadcast(?FRAME(Header, ?ANNOUNCE(Id, Port))),
+      clusterl_radio:broadcast(?_FRAME(Header, ?ANNOUNCE(Id, Port))),
       {ok, Pid} = spawn_accept(Socket),
       State = #state{accept=Pid,
                      id=Id,
@@ -70,7 +71,7 @@ init([Id]) ->
 
 handle_event({transmit, Signal, To, Hops}, connected, State) ->
   Header = ?HEADER({id, State#state.id}, To, Hops),
-  transmit(?FRAME(Header, Signal), links(State)),
+  transmit(?_FRAME(Header, Signal), links(State)),
   {next_state, connected, State};
 
 handle_event(_Event, StateName, State) ->
@@ -107,14 +108,18 @@ handle_info({link_opened, Connection, Id}, StateName, State) ->
       {next_state, connected, NewState}
   end;
 
-handle_info({signal, Link, Ip, ?FRAME(Header, Data)}, StateName, State) ->
-  NewHeader = case Header of
-                ?HEADER(origin, To, Hops) ->
-                  ?HEADER({ip, Ip}, To, Hops);
-                _ ->
-                  Header
-              end,
-  handle_frame(Link, NewHeader, Data, State),
+handle_info({signal, Link, Ip, Frame}, StateName, State) ->
+  case clusterl_dedup:first(Frame) of
+    false ->
+      ignore;
+    true ->
+      ?FRAME(Time, ?HEADER(From, To, Hops), Data) = Frame,
+      RealFrom = case From of
+                   origin -> {ip, Ip};
+                   _ -> From
+                 end,
+      handle_frame(Link, Time, RealFrom, To, Hops, Data, State)
+  end,
   {next_state, StateName, State};
 
 handle_info(Info, StateName, State) ->
@@ -168,15 +173,15 @@ handle_data({ip, Ip}, any, ?ANNOUNCE(_Id, Port), _State) ->
 handle_data(_From, _To, Data, _State) ->
   error_logger:info_msg("Received Data: ~p~n", [Data]).
 
-handle_frame(_Link, ?HEADER({id, Id}, _To, _Hops), _Data, #state{id=Id}) ->
+handle_frame(_Link, _Time, {id, Id}, _To, _Hops, _Data, #state{id=Id}) ->
   ignore;
 
-handle_frame(Link, ?HEADER(From, To, Hops), Data, State) ->
+handle_frame(Link, Time, From, To, Hops, Data, State) ->
   handle_data(From, To, Data, State),
   Frame = case Hops of
     0 -> ignore;
-    infinity -> ?FRAME(?HEADER(From, To, infinity), Data);
-    X -> ?FRAME(?HEADER(From, To, X - 1), Data)
+    infinity -> ?FRAME(Time, ?HEADER(From, To, infinity), Data);
+    X -> ?FRAME(Time, ?HEADER(From, To, X - 1), Data)
   end,
   relay(Frame, Link, links(State)).
 

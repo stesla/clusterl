@@ -12,8 +12,9 @@
 %% To = any | id()
 %% Hops = integer() | infinity
 %% Data = term()
--define(HEADER(From, To, Hops), {clusterl_header, From, To, Hops}).
--define(FRAME(Header, Data), {clusterl_frame, Header, Data}).
+-define(HEADER(From, To, Hops), {h, From, To, Hops}).
+-define(FRAME(Time, Header, Data), {f, Time, Header, Data}).
+-define(_FRAME(Header, Data), ?FRAME(erlang:now(), Header, Data)).
 
 %% Id = id()
 -define(ANNOUNCE(Id, Port), {announce, Id, Port}).

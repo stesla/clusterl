@@ -8,9 +8,10 @@
                 clusterl_radio,
                 clusterl_sup]},
   {applications, [kernel, stdlib]},
-  {env, [{accept_timeout, 10000},
+  {env, [{accept_timeout, 10000}, % 10 seconds
          {broadcast_ip, {255,255,255,255}},
-         {connect_timeout, 60000},
+         {connect_timeout, 60000}, % 1 minute
+         {duplicate_timeout, 600000}, % 10 minutes
          {id, "default"},
          {radio_port, 4065}]},
   {mod, {clusterl, []}}]}.
