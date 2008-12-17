@@ -3,7 +3,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([receive_signal/3, start_link/0, transmit/1]).
+-export([receive_signal/3, start_link/0, transmit/1, transmit/3]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -36,7 +36,10 @@ start_link() ->
   gen_fsm:start_link({local, ?MODULE}, ?MODULE, [?ID], []).
 
 transmit(Signal) ->
-  gen_fsm:send_all_state_event(?MODULE, {transmit, Signal}).
+  transmit(Signal, any, infinity).
+
+transmit(Signal, To, Hops) ->
+  gen_fsm:send_all_state_event(?MODULE, {transmit, Signal, To, Hops}).
 
 %%====================================================================
 %% gen_fsm callbacks
@@ -49,7 +52,8 @@ init([Id]) ->
       error_logger:info_msg("Network Id = ~p~nNetwork Port = ~p~n",
                             [Id, Port]),
       clusterl_radio:add_listener(self()),
-      clusterl_radio:broadcast(?ANNOUNCE(Id, Port)),
+      Header = ?HEADER(origin, any, infinity),
+      clusterl_radio:broadcast(?FRAME(Header, ?ANNOUNCE(Id, Port))),
       {ok, Pid} = spawn_accept(Socket),
       State = #state{accept=Pid,
                      id=Id,
@@ -67,8 +71,9 @@ init([Id]) ->
 %%%   Reply = ok,
 %%%   {reply, Reply, state_name, State}.
 
-handle_event({transmit, Signal}, connected, State) ->
-  transmit(Signal, links(State)),
+handle_event({transmit, Signal, To, Hops}, connected, State) ->
+  Header = ?HEADER({id, State#state.id}, To, Hops),
+  transmit(?FRAME(Header, Signal), links(State)),
   {next_state, connected, State};
 
 handle_event(_Event, StateName, State) ->
@@ -105,8 +110,14 @@ handle_info({link_opened, Connection, Id}, StateName, State) ->
       {next_state, connected, NewState}
   end;
 
-handle_info({signal, Link, Ip, Signal}, StateName, State) ->
-  handle_signal(Ip, Link, Signal, StateName, State),
+handle_info({signal, Link, Ip, ?FRAME(Header, Data)}, StateName, State) ->
+  NewHeader = case Header of
+                ?HEADER(origin, To, Hops) ->
+                  ?HEADER({ip, Ip}, To, Hops);
+                _ ->
+                  Header
+              end,
+  handle_frame(Link, NewHeader, Data, State),
   {next_state, StateName, State};
 
 handle_info(Info, StateName, State) ->
@@ -148,31 +159,32 @@ handle_accept_exit(Reason, StateName, #state{socket=ListenSocket} = State) ->
       {next_state, StateName, State#state{accept=Accept}}
   end.
 
-handle_signal(Peer, Link, ?ANNOUNCE(Id, Port), StateName, State)
-  when is_integer(Port) ->
-  handle_signal(Peer, Link, ?ANNOUNCE(Id, {Peer, Port}), StateName, State);
+%%%  relay(Signal, Link, links(State)),
+%%%  proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
 
-handle_signal(_Peer, Link, ?ANNOUNCE(Id, {Ip, Port}) = Signal,
-              _StateName, State) ->
-  #state{id=MyId} = State,
-  case Id of
-    MyId ->
-      ignore;
-    _ ->
-      relay(Signal, Link, links(State)),
-      proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
-  end;
+handle_data(_From, _To, ?ANNOUNCE(Id, _Port), #state{id=Id}) ->
+  ignore;
 
-handle_signal(Peer, _Link, Signal, _StateName, _State) ->
-  log_signal(Peer, Signal).
+handle_data({ip, Ip}, any, ?ANNOUNCE(_Id, Port), _State) ->
+  proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()]);
+
+handle_data(_From, _To, Data, _State) ->
+  error_logger:info_msg("Received Data: ~p~n", [Data]).
+
+handle_frame(_Link, ?HEADER({id, Id}, _To, _Hops), _Data, #state{id=Id}) ->
+  ignore;
+
+handle_frame(Link, ?HEADER(From, To, Hops), Data, State) ->
+  handle_data(From, To, Data, State),
+  Frame = case Hops of
+    0 -> ignore;
+    infinity -> ?FRAME(?HEADER(From, To, infinity), Data);
+    X -> ?FRAME(?HEADER(From, To, X - 1), Data)
+  end,
+  relay(Frame, Link, links(State)).
 
 links(#state{links=Links}) ->
   dict:fetch_keys(Links).
-
-log_signal(Peer, Signal) ->
-  {Q1,Q2,Q3,Q4} = Peer,
-  error_logger:info_msg("Signal from ~B.~B.~B.~B: ~p~n",
-                        [Q1, Q2, Q3, Q4, Signal]).
 
 open_socket() ->
   gen_tcp:listen(0, [binary,
@@ -180,12 +192,14 @@ open_socket() ->
                      {packet, 0},
                      {reuseaddr, true}]).
 
-relay(Signal, FromLink, Links) ->
-  transmit(Signal, lists:delete(FromLink, Links)).
+relay(ignore, _FromLink, _Links) ->
+  ignore;
+relay(Frame, FromLink, Links) ->
+  transmit(Frame, lists:delete(FromLink, Links)).
 
 spawn_accept(ListenSocket) ->
   Pid = proc_lib:spawn_link(?MODULE, accept, [ListenSocket, self()]),
   {ok, Pid}.
 
-transmit(Signal, Links) ->
-  rpc:pmap({clusterl_link, transmit}, [Signal], Links).
+transmit(Frame, Links) ->
+  rpc:pmap({clusterl_link, transmit}, [Frame], Links).
