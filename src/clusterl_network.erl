@@ -164,14 +164,17 @@ handle_accept_exit(Reason, StateName, #state{socket=ListenSocket} = State) ->
 %%%  relay(Signal, Link, links(State)),
 %%%  proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()])
 
-handle_data(_From, _To, ?ANNOUNCE(Id, _Port), #state{id=Id}) ->
+handle_data(_From, any, ?ANNOUNCE(Id, _Port), #state{id=Id}) ->
   ignore;
 
 handle_data({ip, Ip}, any, ?ANNOUNCE(_Id, Port), _State) ->
   proc_lib:spawn_link(?MODULE, connect, [Ip, Port, self()]);
 
-handle_data(_From, _To, Data, _State) ->
-  error_logger:info_msg("Received Data: ~p~n", [Data]).
+handle_data(_From, To, Data, #state{id=Id}) when To =:= any orelse To =:= Id ->
+  error_logger:info_msg("Received Data: ~p~n", [Data]);
+
+handle_data(_From, _To, _Data, _State) ->
+  ignore.
 
 handle_frame(_Link, _Time, {id, Id}, _To, _Hops, _Data, #state{id=Id}) ->
   ignore;
