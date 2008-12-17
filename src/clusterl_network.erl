@@ -3,7 +3,7 @@
 -behaviour(gen_fsm).
 
 %% API
--export([receive_signal/3, start_link/0, transmit/1, transmit/3]).
+-export([receive_signal/3, start_link/0, transmit/3]).
 
 %% gen_fsm callbacks
 -export([init/1, handle_event/3,
@@ -34,9 +34,6 @@ receive_signal(Pid, Ip, Signal) ->
 
 start_link() ->
   gen_fsm:start_link({local, ?MODULE}, ?MODULE, [?ID], []).
-
-transmit(Signal) ->
-  transmit(Signal, any, infinity).
 
 transmit(Signal, To, Hops) ->
   gen_fsm:send_all_state_event(?MODULE, {transmit, Signal, To, Hops}).
