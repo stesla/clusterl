@@ -28,7 +28,7 @@ NAME=-name
 ROOT=$(cd $(dirname $(dirname $0)); pwd)
 
 $ERL $NAME $ERLANG_NODE \
-  -pa $ROOT/src \
+  -pa $ROOT/ebin \
   -boot start_sasl \
   -mnesia dir \"$MNESIA_DIR\" \
   -s clusterl \
