@@ -2,7 +2,7 @@
 {application, clusterl,
  [{description, "Clusterl Agent"},
   {vsn, "@VERSION@"},
-  {modules, [@MODULES@]},
+  {modules, [@modules@]},
   {registered, [clusterl_link_sup,
                 clusterl_network,
                 clusterl_radio,

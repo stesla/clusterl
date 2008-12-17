@@ -1,18 +1,23 @@
 app = clusterl
-erlfiles = $(wildcard *.erl)
-beamdir = $(ERLANG_INSTALL_LIB_DIR)/$(app)-$(VERSION)/ebin
-beam_DATA =	$(erlfiles:%.erl=%.beam)
-app_DATA = $(app).app
-appdir = $(beamdir)
-CLEANFILES = $(beam_DATA) $(app_DATA)
+
+appdir = $(ERLANG_INSTALL_LIB_DIR)/$(app)-$(VERSION)
+ebindir = $(appdir)/ebin
+
+erl_files = $(wildcard *.erl)
+
+beam_files = $(erl_files:%.erl=../ebin/%.beam)
+app_files = ../ebin/$(app).app
+ebin_DATA = $(beam_files) $(app_files)
+
+CLEANFILES = $(ebin_DATA)
 
 ERLCFLAGS = @ERLCFLAGS@ +debug_info
 
-SUFFIXES = .erl .beam
-.erl.beam:
-	$(ERLC) $(ERLCFLAGS) -b beam $<
+do_subst = $(SED) -e 's|[@]VERSION[@]|$(VERSION)|g'
 
-clusterl.app: clusterl.app.in
-	$(SED) -e 's|[@]VERSION[@]|$(VERSION)|g' \
-		   -e 's|[@]MODULES[@]|$(beam_DATA:%.beam=%,)|g' -e 's/,]}/]}/' \
-		   < $< > $@
+../ebin/%.beam: %.erl
+	$(ERLC) $(ERLCFLAGS) -b beam -o ../ebin $<
+
+../ebin/$(app).app: modules = $(erl_files:%.erl=%,)
+../ebin/$(app).app: $(app).app.in Makefile
+	$(do_subst) -e 's|[@]modules[@]|$(modules)|g' -e 's/,]}/]}/' < $< > $@
